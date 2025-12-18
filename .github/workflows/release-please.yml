@@ -1,0 +1,53 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release-please:
+    name: Release Please
+    timeout-minutes: 10
+    permissions:
+      contents: write # Required to create releases and tags
+      pull-requests: write # Required to create and update release PRs
+      issues: write # Required to comment on issues
+    runs-on: ubuntu-latest
+    outputs:
+      should-release: ${{ steps.release-please.outputs.release_created }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - id: release-please
+        uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0
+        with:
+          release-type: node
+          token: ${{ github.token }}
+
+  publish:
+    name: Publish
+    needs: release-please
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for npm provenance
+    if: ${{ needs.release-please.outputs.should-release == 'true' }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Create .npmrc
+        run: echo 'registry=https://registry.npmjs.org' > .npmrc
+      - run: npm publish # zizmor: ignore[use-trusted-publishing]
