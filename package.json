@@ -25,6 +25,7 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.25.1",
     "commander": "14.0.2"
   },
   "devDependencies": {
