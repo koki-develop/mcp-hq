@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "TODO",
+      "name": "mcp-hq",
       "dependencies": {
         "commander": "14.0.2",
       },

@@ -1,17 +1,17 @@
 {
-  "name": "TODO",
+  "name": "mcp-hq",
   "module": "src/index.ts",
   "type": "module",
   "version": "0.0.0",
   "author": "koki-develop <kou.pg.0131@gmail.com>",
-  "homepage": "https://github.com/koki-develop/TODO",
+  "homepage": "https://github.com/koki-develop/mcp-hq",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/koki-develop/TODO.git"
+    "url": "git+https://github.com/koki-develop/mcp-hq.git"
   },
   "license": "MIT",
   "bin": {
-    "TODO": "dist/index.js"
+    "mcp-hq": "dist/index.js"
   },
   "files": [
     "dist"
