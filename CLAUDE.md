@@ -21,7 +21,7 @@ src/
 ├── index.ts      # CLI entry point (Commander)
 ├── config.ts     # Config schema (Zod) for .mcp-hq.json
 ├── server.ts     # MCP server initialization
-├── tools.ts      # Tool registration (list_mcp_servers, list_tools)
+├── tools.ts      # Tool registration (list_mcp_servers, list_tools, describe_tool)
 └── lib/
     └── mcp.ts    # MCP client utilities for stdio/HTTP transports
 ```
