@@ -3,6 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import * as zod from "zod";
+import type { ConnectionPool } from "./connection-pool";
 
 export const mcpServerInfoSchema = zod.object({
   version: zod.string(),
@@ -175,4 +176,50 @@ export async function callStreamableHttpMcpServerTool(
   // TODO: support auth
   const transport = new StreamableHTTPClientTransport(new URL(url));
   return callMcpServerTool(transport, toolName, toolArgs);
+}
+
+// Pool-based functions
+
+export async function getMcpServerInfoWithPool(
+  pool: ConnectionPool,
+  serverName: string,
+): Promise<McpServerInfo> {
+  const client = await pool.getClient(serverName);
+  const version = client.getServerVersion();
+  const instructions = client.getInstructions();
+  return mcpServerInfoSchema.parse({ ...version, instructions });
+}
+
+export async function getMcpServerToolsWithPool(
+  pool: ConnectionPool,
+  serverName: string,
+): Promise<McpTool[]> {
+  const client = await pool.getClient(serverName);
+  const result = await client.listTools();
+  return result.tools.map((tool) => mcpToolSchema.parse(tool));
+}
+
+export async function getMcpServerToolWithPool(
+  pool: ConnectionPool,
+  serverName: string,
+  toolName: string,
+): Promise<McpToolDetail | null> {
+  const client = await pool.getClient(serverName);
+  const result = await client.listTools();
+  const tool = result.tools.find((t) => t.name === toolName);
+  if (!tool) {
+    return null;
+  }
+  return mcpToolDetailSchema.parse(tool);
+}
+
+export async function callMcpServerToolWithPool(
+  pool: ConnectionPool,
+  serverName: string,
+  toolName: string,
+  args?: Record<string, unknown>,
+): Promise<McpCallToolResult> {
+  const client = await pool.getClient(serverName);
+  const result = await client.callTool({ name: toolName, arguments: args });
+  return mcpCallToolResultSchema.parse(result);
 }

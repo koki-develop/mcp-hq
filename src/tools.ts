@@ -2,18 +2,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import pLimit from "p-limit";
 import * as zod from "zod";
 import type { Config } from "./config";
+import type { ConnectionPool } from "./lib/connection-pool";
 import {
-  callStdioMcpServerTool,
-  callStreamableHttpMcpServerTool,
-  getStdioMcpServer,
-  getStdioMcpServerTool,
-  getStdioMcpServerTools,
-  getStreamableHttpMcpServer,
-  getStreamableHttpMcpServerTool,
-  getStreamableHttpMcpServerTools,
-  type McpCallToolResult,
-  type McpTool,
-  type McpToolDetail,
+  callMcpServerToolWithPool,
+  getMcpServerInfoWithPool,
+  getMcpServerToolsWithPool,
+  getMcpServerToolWithPool,
   mcpCallToolResultSchema,
   mcpToolDetailSchema,
   mcpToolSchema,
@@ -82,7 +76,11 @@ const callToolOutputSchema = zod.object({
 });
 type CallToolOutput = zod.infer<typeof callToolOutputSchema>;
 
-export function registerTools(server: McpServer, config: Config) {
+export function registerTools(
+  server: McpServer,
+  config: Config,
+  pool: ConnectionPool,
+) {
   server.registerTool(
     "list_mcp_servers",
     {
@@ -93,28 +91,10 @@ export function registerTools(server: McpServer, config: Config) {
 
       const output: ListMcpServersOutput = {
         servers: await Promise.all(
-          Object.entries(config.mcpServers).map(([name, serverConfig]) =>
+          Object.keys(config.mcpServers).map((name) =>
             limit(async () => {
-              console.log({ name, serverConfig });
-
-              // stdio server
-              if ("command" in serverConfig) {
-                const server = await getStdioMcpServer(
-                  serverConfig.command,
-                  serverConfig.args ?? [],
-                );
-                return { name, ...server };
-              }
-
-              // streamable HTTP server
-              if ("url" in serverConfig) {
-                const server = await getStreamableHttpMcpServer(
-                  serverConfig.url,
-                );
-                return { name, ...server };
-              }
-
-              throw new Error(`Invalid MCP server config for "${name}".`);
+              const info = await getMcpServerInfoWithPool(pool, name);
+              return { name, ...info };
             }),
           ),
         ),
@@ -134,28 +114,7 @@ export function registerTools(server: McpServer, config: Config) {
       outputSchema: listToolsOutputSchema,
     },
     async ({ server_name }) => {
-      const serverConfig = config.mcpServers[server_name];
-      if (!serverConfig) {
-        throw new Error(
-          `MCP server "${server_name}" not found in configuration. Available servers: ${Object.keys(config.mcpServers).join(", ")}`,
-        );
-      }
-
-      let tools: McpTool[];
-
-      // stdio server
-      if ("command" in serverConfig) {
-        tools = await getStdioMcpServerTools(
-          serverConfig.command,
-          serverConfig.args ?? [],
-        );
-      }
-      // streamable HTTP server
-      else if ("url" in serverConfig) {
-        tools = await getStreamableHttpMcpServerTools(serverConfig.url);
-      } else {
-        throw new Error(`Invalid MCP server config for "${server_name}".`);
-      }
+      const tools = await getMcpServerToolsWithPool(pool, server_name);
 
       const output: ListToolsOutput = {
         server_name,
@@ -178,32 +137,7 @@ export function registerTools(server: McpServer, config: Config) {
       outputSchema: describeToolOutputSchema,
     },
     async ({ server_name, tool_name }) => {
-      const serverConfig = config.mcpServers[server_name];
-      if (!serverConfig) {
-        throw new Error(
-          `MCP server "${server_name}" not found in configuration. Available servers: ${Object.keys(config.mcpServers).join(", ")}`,
-        );
-      }
-
-      let tool: McpToolDetail | null;
-
-      // stdio server
-      if ("command" in serverConfig) {
-        tool = await getStdioMcpServerTool(
-          serverConfig.command,
-          serverConfig.args ?? [],
-          tool_name,
-        );
-      }
-      // streamable HTTP server
-      else if ("url" in serverConfig) {
-        tool = await getStreamableHttpMcpServerTool(
-          serverConfig.url,
-          tool_name,
-        );
-      } else {
-        throw new Error(`Invalid MCP server config for "${server_name}".`);
-      }
+      const tool = await getMcpServerToolWithPool(pool, server_name, tool_name);
 
       const output: DescribeToolOutput = {
         server_name,
@@ -225,34 +159,12 @@ export function registerTools(server: McpServer, config: Config) {
       outputSchema: callToolOutputSchema,
     },
     async ({ server_name, tool_name, arguments: toolArgs }) => {
-      const serverConfig = config.mcpServers[server_name];
-      if (!serverConfig) {
-        throw new Error(
-          `MCP server "${server_name}" not found in configuration. Available servers: ${Object.keys(config.mcpServers).join(", ")}`,
-        );
-      }
-
-      let result: McpCallToolResult;
-
-      // stdio server
-      if ("command" in serverConfig) {
-        result = await callStdioMcpServerTool(
-          serverConfig.command,
-          serverConfig.args ?? [],
-          tool_name,
-          toolArgs,
-        );
-      }
-      // streamable HTTP server
-      else if ("url" in serverConfig) {
-        result = await callStreamableHttpMcpServerTool(
-          serverConfig.url,
-          tool_name,
-          toolArgs,
-        );
-      } else {
-        throw new Error(`Invalid MCP server config for "${server_name}".`);
-      }
+      const result = await callMcpServerToolWithPool(
+        pool,
+        server_name,
+        tool_name,
+        toolArgs,
+      );
 
       const output: CallToolOutput = {
         server_name,
