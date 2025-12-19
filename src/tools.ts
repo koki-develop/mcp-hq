@@ -2,7 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import pLimit from "p-limit";
 import * as zod from "zod";
 import type { Config } from "./config";
-import { getStdioMcpServer, getStreamableHttpMcpServer } from "./lib/mcp";
+import {
+  getStdioMcpServer,
+  getStdioMcpServerTools,
+  getStreamableHttpMcpServer,
+  getStreamableHttpMcpServerTools,
+  type McpTool,
+  mcpToolSchema,
+} from "./lib/mcp";
 
 const listMcpServersOutputSchema = zod.object({
   servers: zod.array(
@@ -21,6 +28,18 @@ const listMcpServersOutputSchema = zod.object({
   ),
 });
 type ListMcpServersOutput = zod.infer<typeof listMcpServersOutputSchema>;
+
+const listToolsInputSchema = zod.object({
+  server_name: zod
+    .string()
+    .describe("Name of the MCP server to list tools from"),
+});
+
+const listToolsOutputSchema = zod.object({
+  server_name: zod.string().describe("Name of the MCP server"),
+  tools: zod.array(mcpToolSchema),
+});
+type ListToolsOutput = zod.infer<typeof listToolsOutputSchema>;
 
 export function registerTools(server: McpServer, config: Config) {
   server.registerTool(
@@ -58,6 +77,48 @@ export function registerTools(server: McpServer, config: Config) {
             }),
           ),
         ),
+      };
+
+      return {
+        structuredContent: output,
+        content: [{ type: "text", text: JSON.stringify(output) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    "list_tools",
+    {
+      inputSchema: listToolsInputSchema,
+      outputSchema: listToolsOutputSchema,
+    },
+    async ({ server_name }) => {
+      const serverConfig = config.mcpServers[server_name];
+      if (!serverConfig) {
+        throw new Error(
+          `MCP server "${server_name}" not found in configuration. Available servers: ${Object.keys(config.mcpServers).join(", ")}`,
+        );
+      }
+
+      let tools: McpTool[];
+
+      // stdio server
+      if ("command" in serverConfig) {
+        tools = await getStdioMcpServerTools(
+          serverConfig.command,
+          serverConfig.args ?? [],
+        );
+      }
+      // streamable HTTP server
+      else if ("url" in serverConfig) {
+        tools = await getStreamableHttpMcpServerTools(serverConfig.url);
+      } else {
+        throw new Error(`Invalid MCP server config for "${server_name}".`);
+      }
+
+      const output: ListToolsOutput = {
+        server_name,
+        tools,
       };
 
       return {
