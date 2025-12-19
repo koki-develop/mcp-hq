@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import * as zod from "zod";
 
 export const mcpServerInfoSchema = zod.object({
@@ -44,88 +45,79 @@ export const mcpToolDetailSchema = zod.object({
 });
 export type McpToolDetail = zod.infer<typeof mcpToolDetailSchema>;
 
-export async function getStdioMcpServer(
-  command: string,
-  args: string[],
-): Promise<McpServerInfo> {
+// Helper functions
+async function withMcpClient<T>(
+  transport: Transport,
+  callback: (client: Client) => Promise<T>,
+): Promise<T> {
   const client = new Client({ name: "mcp-info-client", version: "0.0.0" });
-
   try {
-    const transport = new StdioClientTransport({
-      command,
-      args,
-    });
     await client.connect(transport);
-
-    const version = client.getServerVersion();
-    const instructions = client.getInstructions();
-
-    return mcpServerInfoSchema.parse({
-      ...version,
-      instructions,
-    });
+    return await callback(client);
   } finally {
     await client.close();
   }
 }
 
+async function getMcpServerInfo(transport: Transport): Promise<McpServerInfo> {
+  return withMcpClient(transport, async (client) => {
+    const version = client.getServerVersion();
+    const instructions = client.getInstructions();
+    return mcpServerInfoSchema.parse({ ...version, instructions });
+  });
+}
+
+async function getMcpServerTools(transport: Transport): Promise<McpTool[]> {
+  return withMcpClient(transport, async (client) => {
+    const result = await client.listTools();
+    return result.tools.map((tool) => mcpToolSchema.parse(tool));
+  });
+}
+
+async function getMcpServerTool(
+  transport: Transport,
+  toolName: string,
+): Promise<McpToolDetail | null> {
+  return withMcpClient(transport, async (client) => {
+    const result = await client.listTools();
+    const tool = result.tools.find((t) => t.name === toolName);
+    if (!tool) {
+      return null;
+    }
+    return mcpToolDetailSchema.parse(tool);
+  });
+}
+
+export async function getStdioMcpServer(
+  command: string,
+  args: string[],
+): Promise<McpServerInfo> {
+  const transport = new StdioClientTransport({ command, args });
+  return getMcpServerInfo(transport);
+}
+
 export async function getStreamableHttpMcpServer(
   url: string,
 ): Promise<McpServerInfo> {
-  const client = new Client({ name: "mcp-info-client", version: "0.0.0" });
-
-  try {
-    // TODO: support auth
-    const transport = new StreamableHTTPClientTransport(new URL(url));
-    await client.connect(transport);
-
-    const version = client.getServerVersion();
-    const instructions = client.getInstructions();
-
-    return mcpServerInfoSchema.parse({
-      ...version,
-      instructions,
-    });
-  } finally {
-    await client.close();
-  }
+  // TODO: support auth
+  const transport = new StreamableHTTPClientTransport(new URL(url));
+  return getMcpServerInfo(transport);
 }
 
 export async function getStdioMcpServerTools(
   command: string,
   args: string[],
 ): Promise<McpTool[]> {
-  const client = new Client({ name: "mcp-tools-client", version: "0.0.0" });
-
-  try {
-    const transport = new StdioClientTransport({
-      command,
-      args,
-    });
-    await client.connect(transport);
-
-    const result = await client.listTools();
-    return result.tools.map((tool) => mcpToolSchema.parse(tool));
-  } finally {
-    await client.close();
-  }
+  const transport = new StdioClientTransport({ command, args });
+  return getMcpServerTools(transport);
 }
 
 export async function getStreamableHttpMcpServerTools(
   url: string,
 ): Promise<McpTool[]> {
-  const client = new Client({ name: "mcp-tools-client", version: "0.0.0" });
-
-  try {
-    // TODO: support auth
-    const transport = new StreamableHTTPClientTransport(new URL(url));
-    await client.connect(transport);
-
-    const result = await client.listTools();
-    return result.tools.map((tool) => mcpToolSchema.parse(tool));
-  } finally {
-    await client.close();
-  }
+  // TODO: support auth
+  const transport = new StreamableHTTPClientTransport(new URL(url));
+  return getMcpServerTools(transport);
 }
 
 export async function getStdioMcpServerTool(
@@ -133,41 +125,15 @@ export async function getStdioMcpServerTool(
   args: string[],
   toolName: string,
 ): Promise<McpToolDetail | null> {
-  const client = new Client({ name: "mcp-tools-client", version: "0.0.0" });
-
-  try {
-    const transport = new StdioClientTransport({ command, args });
-    await client.connect(transport);
-
-    const result = await client.listTools();
-    const tool = result.tools.find((t) => t.name === toolName);
-    if (!tool) {
-      return null;
-    }
-    return mcpToolDetailSchema.parse(tool);
-  } finally {
-    await client.close();
-  }
+  const transport = new StdioClientTransport({ command, args });
+  return getMcpServerTool(transport, toolName);
 }
 
 export async function getStreamableHttpMcpServerTool(
   url: string,
   toolName: string,
 ): Promise<McpToolDetail | null> {
-  const client = new Client({ name: "mcp-tools-client", version: "0.0.0" });
-
-  try {
-    // TODO: support auth
-    const transport = new StreamableHTTPClientTransport(new URL(url));
-    await client.connect(transport);
-
-    const result = await client.listTools();
-    const tool = result.tools.find((t) => t.name === toolName);
-    if (!tool) {
-      return null;
-    }
-    return mcpToolDetailSchema.parse(tool);
-  } finally {
-    await client.close();
-  }
+  // TODO: support auth
+  const transport = new StreamableHTTPClientTransport(new URL(url));
+  return getMcpServerTool(transport, toolName);
 }
