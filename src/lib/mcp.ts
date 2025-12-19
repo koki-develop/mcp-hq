@@ -16,6 +16,34 @@ export const mcpToolSchema = zod.object({
 });
 export type McpTool = zod.infer<typeof mcpToolSchema>;
 
+// JSON Schema オブジェクトの基本形
+export const jsonSchemaObjectSchema = zod
+  .object({
+    type: zod.literal("object"),
+    properties: zod.record(zod.string(), zod.unknown()).optional(),
+    required: zod.array(zod.string()).optional(),
+  })
+  .passthrough();
+
+// ツールのアノテーション
+export const mcpToolAnnotationsSchema = zod.object({
+  title: zod.string().optional(),
+  readOnlyHint: zod.boolean().optional(),
+  destructiveHint: zod.boolean().optional(),
+  idempotentHint: zod.boolean().optional(),
+  openWorldHint: zod.boolean().optional(),
+});
+
+// 詳細なツール情報
+export const mcpToolDetailSchema = zod.object({
+  name: zod.string(),
+  description: zod.string().optional(),
+  inputSchema: jsonSchemaObjectSchema,
+  outputSchema: jsonSchemaObjectSchema.optional(),
+  annotations: mcpToolAnnotationsSchema.optional(),
+});
+export type McpToolDetail = zod.infer<typeof mcpToolDetailSchema>;
+
 export async function getStdioMcpServer(
   command: string,
   args: string[],
@@ -95,6 +123,50 @@ export async function getStreamableHttpMcpServerTools(
 
     const result = await client.listTools();
     return result.tools.map((tool) => mcpToolSchema.parse(tool));
+  } finally {
+    await client.close();
+  }
+}
+
+export async function getStdioMcpServerTool(
+  command: string,
+  args: string[],
+  toolName: string,
+): Promise<McpToolDetail | null> {
+  const client = new Client({ name: "mcp-tools-client", version: "0.0.0" });
+
+  try {
+    const transport = new StdioClientTransport({ command, args });
+    await client.connect(transport);
+
+    const result = await client.listTools();
+    const tool = result.tools.find((t) => t.name === toolName);
+    if (!tool) {
+      return null;
+    }
+    return mcpToolDetailSchema.parse(tool);
+  } finally {
+    await client.close();
+  }
+}
+
+export async function getStreamableHttpMcpServerTool(
+  url: string,
+  toolName: string,
+): Promise<McpToolDetail | null> {
+  const client = new Client({ name: "mcp-tools-client", version: "0.0.0" });
+
+  try {
+    // TODO: support auth
+    const transport = new StreamableHTTPClientTransport(new URL(url));
+    await client.connect(transport);
+
+    const result = await client.listTools();
+    const tool = result.tools.find((t) => t.name === toolName);
+    if (!tool) {
+      return null;
+    }
+    return mcpToolDetailSchema.parse(tool);
   } finally {
     await client.close();
   }
