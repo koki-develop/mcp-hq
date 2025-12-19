@@ -37,5 +37,6 @@ src/
 
 - **Zod schemas** for config validation and type inference
 - **p-limit(5)** for concurrent MCP server connections
-- **try/finally** for MCP client cleanup (`client.close()`)
+- **withMcpClient helper** for MCP client lifecycle management (connect, execute, cleanup)
+- **Transport abstraction** - helper functions (`getMcpServerInfo`, `getMcpServerTools`, `getMcpServerTool`) accept `Transport` to eliminate duplication between stdio/HTTP implementations
 - Two server types: stdio (`command` + `args`) and HTTP (`url`)
