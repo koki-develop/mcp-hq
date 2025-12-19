@@ -45,6 +45,14 @@ export const mcpToolDetailSchema = zod.object({
 });
 export type McpToolDetail = zod.infer<typeof mcpToolDetailSchema>;
 
+// ツール呼び出し結果
+export const mcpCallToolResultSchema = zod.object({
+  content: zod.array(zod.unknown()).optional(),
+  structuredContent: zod.record(zod.string(), zod.unknown()).optional(),
+  isError: zod.boolean().optional(),
+});
+export type McpCallToolResult = zod.infer<typeof mcpCallToolResultSchema>;
+
 // Helper functions
 async function withMcpClient<T>(
   transport: Transport,
@@ -85,6 +93,17 @@ async function getMcpServerTool(
       return null;
     }
     return mcpToolDetailSchema.parse(tool);
+  });
+}
+
+async function callMcpServerTool(
+  transport: Transport,
+  toolName: string,
+  args?: Record<string, unknown>,
+): Promise<McpCallToolResult> {
+  return withMcpClient(transport, async (client) => {
+    const result = await client.callTool({ name: toolName, arguments: args });
+    return mcpCallToolResultSchema.parse(result);
   });
 }
 
@@ -136,4 +155,24 @@ export async function getStreamableHttpMcpServerTool(
   // TODO: support auth
   const transport = new StreamableHTTPClientTransport(new URL(url));
   return getMcpServerTool(transport, toolName);
+}
+
+export async function callStdioMcpServerTool(
+  command: string,
+  args: string[],
+  toolName: string,
+  toolArgs?: Record<string, unknown>,
+): Promise<McpCallToolResult> {
+  const transport = new StdioClientTransport({ command, args });
+  return callMcpServerTool(transport, toolName, toolArgs);
+}
+
+export async function callStreamableHttpMcpServerTool(
+  url: string,
+  toolName: string,
+  toolArgs?: Record<string, unknown>,
+): Promise<McpCallToolResult> {
+  // TODO: support auth
+  const transport = new StreamableHTTPClientTransport(new URL(url));
+  return callMcpServerTool(transport, toolName, toolArgs);
 }
